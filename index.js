@@ -2123,9 +2123,87 @@ const Spark = {
 
 const soundManager = {
 	baseURL: 'https://s3-us-west-2.amazonaws.com/s.cdpn.io/329180/',
-	musicURL: 'assets/Will Talks.mp3',
+	// Update music URL to use local path
+	musicURL: './assets/Will Talks.mp3', // Assuming the file is in an assets folder
 	ctx: new (window.AudioContext || window.webkitAudioContext),
 	musicElement: null,
+	
+	preload() {
+		// Create audio element for background music
+		this.musicElement = new Audio(this.musicURL);
+		this.musicElement.loop = true;
+		this.musicElement.volume = this.musicVolume;
+		
+		// Add error handling for music loading
+		this.musicElement.addEventListener('error', (e) => {
+			console.error('Error loading music:', e);
+			// Fallback to alternative music source if needed
+		});
+
+		const allFilePromises = [];
+
+		function checkStatus(response) {
+			if (response.status >= 200 && response.status < 300) {
+				return response;
+			}
+			const customError = new Error(response.statusText);
+			customError.response = response;
+			throw customError;
+		}
+
+		const types = Object.keys(this.sources);
+		types.forEach(type => {
+			const source = this.sources[type];
+			const { fileNames } = source;
+			const filePromises = [];
+			fileNames.forEach(fileName => {
+				const fileURL = this.baseURL + fileName;
+				// Promise will resolve with decoded audio buffer.
+				const promise = fetch(fileURL)
+					.then(checkStatus)
+					.then(response => response.arrayBuffer())
+					.then(data => new Promise(resolve => {
+						this.ctx.decodeAudioData(data, resolve);
+					}));
+
+				filePromises.push(promise);
+				allFilePromises.push(promise);
+			});
+
+			Promise.all(filePromises)
+				.then(buffers => {
+					source.buffers = buffers;
+				});
+		});
+
+		return Promise.all(allFilePromises);
+	},
+
+	// Add method to check if music is playing
+	isMusicPlaying() {
+		return this.musicElement && !this.musicElement.paused;
+	},
+
+	playMusic() {
+		if (this.musicElement) {
+			// Create a promise to handle autoplay restrictions
+			const playAttempt = this.musicElement.play();
+			
+			if (playAttempt) {
+				playAttempt.catch((error) => {
+					console.log('Autoplay prevented:', error);
+					// Music will now play on first user interaction
+				});
+			}
+		}
+	},
+
+	pauseMusic() {
+		if (this.musicElement && this.isMusicPlaying()) {
+			this.musicElement.pause();
+		}
+	},
+
 	// Adjust these volume levels
 	musicVolume: 0.8, // Increase music volume (0-1)
 	sources: {
@@ -2171,51 +2249,6 @@ const soundManager = {
 		}
 	},
 
-	preload() {
-		// Create audio element for background music
-		this.musicElement = new Audio(this.musicURL);
-		this.musicElement.loop = true;
-		this.musicElement.volume = this.musicVolume; // Set initial music volume
-		
-		const allFilePromises = [];
-
-		function checkStatus(response) {
-			if (response.status >= 200 && response.status < 300) {
-				return response;
-			}
-			const customError = new Error(response.statusText);
-			customError.response = response;
-			throw customError;
-		}
-
-		const types = Object.keys(this.sources);
-		types.forEach(type => {
-			const source = this.sources[type];
-			const { fileNames } = source;
-			const filePromises = [];
-			fileNames.forEach(fileName => {
-				const fileURL = this.baseURL + fileName;
-				// Promise will resolve with decoded audio buffer.
-				const promise = fetch(fileURL)
-					.then(checkStatus)
-					.then(response => response.arrayBuffer())
-					.then(data => new Promise(resolve => {
-						this.ctx.decodeAudioData(data, resolve);
-					}));
-
-				filePromises.push(promise);
-				allFilePromises.push(promise);
-			});
-
-			Promise.all(filePromises)
-				.then(buffers => {
-					source.buffers = buffers;
-				});
-		});
-
-		return Promise.all(allFilePromises);
-	},
-	
 	pauseAll() {
 		this.ctx.suspend();
 		this.pauseMusic();
@@ -2294,19 +2327,6 @@ const soundManager = {
 		bufferSource.start(0);
 	},
 
-	// Add music control methods
-	playMusic() {
-		if (this.musicElement) {
-			this.musicElement.play();
-		}
-	},
-
-	pauseMusic() {
-		if (this.musicElement) {
-			this.musicElement.pause();
-		}
-	},
-
 	// Add method to adjust volume balance
 	setVolumeBalance(musicVol, effectsVol) {
 		// Set music volume (0-1)
@@ -2374,8 +2394,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleFirstInteraction() {
         touchInstruction.classList.add('hide');
         
-        // Start playing background music
-        soundManager.playMusic();
+        // Start playing background music with user interaction
+        if (soundManager.musicElement && !soundManager.isMusicPlaying()) {
+            soundManager.playMusic();
+        }
         
         // Remove the event listeners after first interaction
         document.removeEventListener('click', handleFirstInteraction);
