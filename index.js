@@ -120,7 +120,7 @@ const store = {
 		menuOpen: false,
 		openHelpTopic: null,
 		fullscreen: isFullscreen(),
-		// Note that config values used for <select>s must be strings, unless manually converting values to strings
+		// Note that config values used for <select>s must be strings, unless manually converting values to strings to
 		// at render time, and parsing on change.
 		config: {
 			quality: String(IS_HIGH_END_DEVICE ? QUALITY_HIGH : QUALITY_NORMAL), // will be mirrored to a global variable named `quality` in `configDidUpdate`, for perf.
@@ -2499,29 +2499,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = "Creator: Darwin Melaya";
         ctx.save();
         
-        // Set text properties
-        ctx.font = 'bold 16px "Russo One"';
+        // Increase font size and make it more visible
+        ctx.font = 'bold 20px "Russo One"';
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
         
-        // Position the text in the bottom right corner with some padding
-        const x = ctx.canvas.width - 20;  // 20px from right
-        const y = ctx.canvas.height - 20;  // 20px from bottom
+        // Adjust position to ensure visibility (further from edges)
+        const x = ctx.canvas.width - 30;  // 30px from right
+        const y = ctx.canvas.height - 30;  // 30px from bottom
         
-        // Create glow effect
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-        ctx.shadowBlur = 8;
+        // Enhanced glow effect
+        ctx.shadowColor = 'rgba(255, 255, 255, 1)';
+        ctx.shadowBlur = 15;
         
-        // Multiple shadow layers for stronger glow
-        for (let i = 0; i < 5; i++) {
-            ctx.shadowBlur = 8 + i * 2;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        // Stronger glow with more layers
+        for (let i = 0; i < 8; i++) {
+            ctx.shadowBlur = 15 + i * 3;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
             ctx.fillText(text, x, y);
         }
         
-        // Draw main text
+        // Make main text more opaque
         ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.fillText(text, x, y);
         
         ctx.restore();
