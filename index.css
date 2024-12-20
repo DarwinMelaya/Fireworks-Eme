@@ -473,3 +473,13 @@ body {
 .touch-instruction.hide {
     display: none;
 }
+
+@keyframes textGlow {
+    0% { text-shadow: 0 0 10px #fff, 0 0 20px #fff, 0 0 30px #ff69b4, 0 0 40px #ff69b4; }
+    100% { text-shadow: 0 0 20px #fff, 0 0 30px #ff1493, 0 0 40px #ff1493, 0 0 50px #ff1493; }
+}
+
+.burst-message {
+    font-family: 'Russo One', sans-serif;
+    animation: textGlow 1s ease-in-out infinite alternate;
+}

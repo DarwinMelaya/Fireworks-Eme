@@ -1467,6 +1467,53 @@ function render(speed) {
 	
 	trailsCtx.setTransform(1, 0, 0, 1, 0, 0);
 	mainCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+	// Draw burst messages
+	mainCtx.font = 'bold 40px "Russo One"'; // Increased size and using Russo One font
+	mainCtx.textAlign = 'center';
+	mainCtx.textBaseline = 'middle';
+
+	// Update and render messages
+	for (let i = BurstMessage.active.length - 1; i >= 0; i--) {
+		const message = BurstMessage.active[i];
+		message.life -= speed * 16.67;
+
+		if (message.life <= 0) {
+			BurstMessage.active.splice(i, 1);
+			BurstMessage.returnInstance(message);
+			continue;
+		}
+
+		// Fade out text
+		const opacity = Math.min(1, message.life / 500);
+		
+		// Draw glowing effect
+		const glowSize = 20;
+		const glowPasses = [
+			{ color: 'rgba(255, 255, 255, ' + opacity * 0.4 + ')', offset: glowSize },
+			{ color: 'rgba(255, 105, 180, ' + opacity * 0.4 + ')', offset: glowSize * 0.7 },
+			{ color: 'rgba(255, 20, 147, ' + opacity * 0.4 + ')', offset: glowSize * 0.5 }
+		];
+
+		// Draw multiple layers of text for glow effect
+		glowPasses.forEach(pass => {
+			mainCtx.shadowColor = pass.color;
+			mainCtx.shadowBlur = pass.offset;
+			mainCtx.fillStyle = pass.color;
+			mainCtx.fillText(message.text, message.x, message.y);
+		});
+
+		// Draw main text
+		mainCtx.shadowColor = 'none';
+		mainCtx.shadowBlur = 0;
+		mainCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+		mainCtx.fillText(message.text, message.x, message.y);
+	}
+
+	// Reset shadow effects
+	mainCtx.shadowColor = 'none';
+	mainCtx.shadowBlur = 0;
+	mainCtx.globalAlpha = 1;
 }
 
 
@@ -1984,6 +2031,9 @@ class Shell {
 			const soundScale = (1 - sizeDifferenceFromMaxSize / maxDiff) * 0.3 + 0.7;
 			soundManager.playSound('burst', soundScale);
 		}
+
+		// Add burst message at the burst location
+		BurstMessage.add(x, y);
 	}
 }
 
@@ -2434,3 +2484,99 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ... rest of your DOM loaded code ...
 });
+
+// Modify the BurstMessage object to limit concurrent messages
+const BurstMessage = {
+    active: [],
+    _pool: [],
+    messages: [
+        "Miss Na Kita",
+        "Balik Ka Na"
+    ],
+    maxActiveMessages: 2, // Limit to 2 messages at a time
+
+    _new() {
+        return {
+            text: '',
+            x: 0,
+            y: 0,
+            life: 0
+        };
+    },
+
+    add(x, y) {
+        // Only add new message if we're under the limit
+        if (this.active.length >= this.maxActiveMessages) {
+            return null;
+        }
+
+        const instance = this._pool.pop() || this._new();
+        
+        instance.text = this.messages[Math.floor(Math.random() * this.messages.length)];
+        instance.x = x;
+        instance.y = y;
+        instance.life = 3000; // Increased duration to 3 seconds
+        
+        this.active.push(instance);
+        return instance;
+    },
+
+    returnInstance(instance) {
+        this._pool.push(instance);
+    }
+};
+
+// Update the render code for burst messages
+// Add this to your render loop where other effects are drawn
+mainCtx.font = 'bold 40px "Russo One"';
+mainCtx.textAlign = 'center';
+mainCtx.textBaseline = 'middle';
+
+// Update and render messages
+for (let i = BurstMessage.active.length - 1; i >= 0; i--) {
+    const message = BurstMessage.active[i];
+    message.life -= speed * 16.67;
+
+    if (message.life <= 0) {
+        BurstMessage.active.splice(i, 1);
+        BurstMessage.returnInstance(message);
+        continue;
+    }
+
+    // Fade out text more gradually
+    const opacity = Math.min(1, message.life / 1000);
+    
+    // Draw glowing effect
+    const glowSize = 20;
+    const glowPasses = [
+        { color: `rgba(255, 255, 255, ${opacity * 0.6})`, offset: glowSize },
+        { color: `rgba(255, 105, 180, ${opacity * 0.6})`, offset: glowSize * 0.7 },
+        { color: `rgba(255, 20, 147, ${opacity * 0.6})`, offset: glowSize * 0.5 }
+    ];
+
+    // Position messages at fixed locations instead of burst points
+    const fixedPositions = [
+        { x: mainStage.width * 0.25, y: mainStage.height * 0.3 },
+        { x: mainStage.width * 0.75, y: mainStage.height * 0.3 }
+    ];
+    const pos = fixedPositions[i];
+
+    // Draw multiple layers of text for glow effect
+    glowPasses.forEach(pass => {
+        mainCtx.shadowColor = pass.color;
+        mainCtx.shadowBlur = pass.offset;
+        mainCtx.fillStyle = pass.color;
+        mainCtx.fillText(message.text, pos.x, pos.y);
+    });
+
+    // Draw main text
+    mainCtx.shadowColor = 'none';
+    mainCtx.shadowBlur = 0;
+    mainCtx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+    mainCtx.fillText(message.text, pos.x, pos.y);
+}
+
+// Reset shadow effects
+mainCtx.shadowColor = 'none';
+mainCtx.shadowBlur = 0;
+mainCtx.globalAlpha = 1;
