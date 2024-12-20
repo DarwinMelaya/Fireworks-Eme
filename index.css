@@ -455,28 +455,19 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-family: "Russo One", arial, sans-serif;
-    font-size: 2em;
-    color: rgba(255, 255, 255, 0.8);
+    font-family: 'Russo One', sans-serif;
+    color: white;
+    text-shadow: 0 0 10px white;
     text-align: center;
     pointer-events: none;
-    animation: pulse 2s infinite;
-    z-index: 1000;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5),
-                 0 0 20px rgba(255, 255, 255, 0.5),
-                 0 0 30px rgba(255, 255, 255, 0.5);
+    z-index: 1;
 }
 
-@keyframes pulse {
-    0% {
-        opacity: 0.4;
-    }
-    50% {
-        opacity: 1;
-    }
-    100% {
-        opacity: 0.4;
-    }
+.creator-credit {
+    font-size: 0.8em;
+    margin-top: 10px;
+    opacity: 0.8;
+    font-family: 'Russo One', sans-serif;
 }
 
 .touch-instruction.hide {

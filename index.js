@@ -809,6 +809,12 @@ function init() {
 	document.querySelector('.loading-init').remove();
 	appNodes.stageContainer.classList.remove('remove');
 	
+	// Initialize and store original volumes
+	soundManager.initVolumes();
+	
+	// Set initial volume balance (music louder than effects)
+	soundManager.setVolumeBalance(0.8, 0.4);
+	
 	// Populate dropdowns
 	function setOptionsForSelect(node, options) {
 		node.innerHTML = options.reduce((acc, opt) => acc += `<option value="${opt.value}">${opt.label}</option>`, '');
@@ -2117,10 +2123,14 @@ const Spark = {
 
 const soundManager = {
 	baseURL: 'https://s3-us-west-2.amazonaws.com/s.cdpn.io/329180/',
+	musicURL: 'assets/Will Talks.mp3',
 	ctx: new (window.AudioContext || window.webkitAudioContext),
+	musicElement: null,
+	// Adjust these volume levels
+	musicVolume: 0.8, // Increase music volume (0-1)
 	sources: {
 		lift: {
-			volume: 1,
+			volume: 0.4, // Reduce firework sound volumes
 			playbackRateMin: 0.85,
 			playbackRateMax: 0.95,
 			fileNames: [
@@ -2130,7 +2140,7 @@ const soundManager = {
 			]
 		},
 		burst: {
-			volume: 1,
+			volume: 0.4, // Reduce burst volume
 			playbackRateMin: 0.8,
 			playbackRateMax: 0.9,
 			fileNames: [
@@ -2139,7 +2149,7 @@ const soundManager = {
 			]
 		},
 		burstSmall: {
-			volume: 0.25,
+			volume: 0.1, // Reduce small burst volume
 			playbackRateMin: 0.8,
 			playbackRateMax: 1,
 			fileNames: [
@@ -2148,13 +2158,13 @@ const soundManager = {
 			]
 		},
 		crackle: {
-			volume: 0.2,
+			volume: 0.08, // Reduce crackle volume
 			playbackRateMin: 1,
 			playbackRateMax: 1,
 			fileNames: ['crackle1.mp3']
 		},
 		crackleSmall: {
-			volume: 0.3,
+			volume: 0.12, // Reduce small crackle volume
 			playbackRateMin: 1,
 			playbackRateMax: 1,
 			fileNames: ['crackle-sm-1.mp3']
@@ -2162,6 +2172,11 @@ const soundManager = {
 	},
 
 	preload() {
+		// Create audio element for background music
+		this.musicElement = new Audio(this.musicURL);
+		this.musicElement.loop = true;
+		this.musicElement.volume = this.musicVolume; // Set initial music volume
+		
 		const allFilePromises = [];
 
 		function checkStatus(response) {
@@ -2203,22 +2218,19 @@ const soundManager = {
 	
 	pauseAll() {
 		this.ctx.suspend();
+		this.pauseMusic();
 	},
 
 	resumeAll() {
-		// Play a sound with no volume for iOS. This 'unlocks' the audio context when the user first enables sound.
+		// Play a sound with no volume for iOS. This 'unlocks' the audio context
 		this.playSound('lift', 0);
-		// Chrome mobile requires interaction before starting audio context.
-		// The sound toggle button is triggered on 'touchstart', which doesn't seem to count as a full
-		// interaction to Chrome. I guess it needs a click? At any rate if the first thing the user does
-		// is enable audio, it doesn't work. Using a setTimeout allows the first interaction to be registered.
-		// Perhaps a better solution is to track whether the user has interacted, and if not but they try enabling
-		// sound, show a tooltip that they should tap again to enable sound.
+		
 		setTimeout(() => {
 			this.ctx.resume();
+			this.playMusic(); // Resume music when all audio resumes
 		}, 250);
 	},
-	
+
 	// Private property used to throttle small burst sounds.
 	_lastSmallBurstTime: 0,
 
@@ -2280,7 +2292,42 @@ const soundManager = {
 		bufferSource.connect(gainNode);
 		gainNode.connect(this.ctx.destination);
 		bufferSource.start(0);
-	}
+	},
+
+	// Add music control methods
+	playMusic() {
+		if (this.musicElement) {
+			this.musicElement.play();
+		}
+	},
+
+	pauseMusic() {
+		if (this.musicElement) {
+			this.musicElement.pause();
+		}
+	},
+
+	// Add method to adjust volume balance
+	setVolumeBalance(musicVol, effectsVol) {
+		// Set music volume (0-1)
+		if (this.musicElement) {
+			this.musicElement.volume = Math.max(0, Math.min(1, musicVol));
+		}
+		
+		// Scale all effect volumes
+		Object.keys(this.sources).forEach(type => {
+			const source = this.sources[type];
+			source.volume = source.originalVolume * effectsVol;
+		});
+	},
+
+	// Store original volumes for effects
+	initVolumes() {
+		Object.keys(this.sources).forEach(type => {
+			const source = this.sources[type];
+			source.originalVolume = source.volume;
+		});
+	},
 };
 
 
@@ -2323,16 +2370,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hide the loading screen
     document.querySelector('.loading-init').classList.add('remove');
 
-    // Hide instruction on first click/touch
-    function hideInstruction() {
+    // Hide instruction and start music on first interaction
+    function handleFirstInteraction() {
         touchInstruction.classList.add('hide');
-        document.removeEventListener('click', hideInstruction);
-        document.removeEventListener('touchstart', hideInstruction);
+        
+        // Start playing background music
+        soundManager.playMusic();
+        
+        // Remove the event listeners after first interaction
+        document.removeEventListener('click', handleFirstInteraction);
+        document.removeEventListener('touchstart', handleFirstInteraction);
     }
 
     // Add event listeners for both click and touch
-    document.addEventListener('click', hideInstruction);
-    document.addEventListener('touchstart', hideInstruction);
+    document.addEventListener('click', handleFirstInteraction);
+    document.addEventListener('touchstart', handleFirstInteraction);
 
     // Set up canvas sizes
     function resizeCanvas() {
@@ -2494,39 +2546,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ));
     });
 
-    // Add this after your existing code, just before the animate() function
-    function drawWatermark(ctx) {
-        const text = "Creator: Darwin Melaya";
-        ctx.save();
-        
-        // Increase font size and make it more visible
-        ctx.font = 'bold 20px "Russo One"';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'bottom';
-        
-        // Adjust position to ensure visibility (further from edges)
-        const x = ctx.canvas.width - 30;  // 30px from right
-        const y = ctx.canvas.height - 30;  // 30px from bottom
-        
-        // Enhanced glow effect
-        ctx.shadowColor = 'rgba(255, 255, 255, 1)';
-        ctx.shadowBlur = 15;
-        
-        // Stronger glow with more layers
-        for (let i = 0; i < 8; i++) {
-            ctx.shadowBlur = 15 + i * 3;
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.fillText(text, x, y);
-        }
-        
-        // Make main text more opaque
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillText(text, x, y);
-        
-        ctx.restore();
-    }
-
     // Modify your animate function to include the watermark
     function animate() {
         // Clear canvas with semi-transparent black for trail effect
@@ -2539,9 +2558,6 @@ document.addEventListener('DOMContentLoaded', () => {
             firework.draw();
             return !firework.isDead();
         });
-
-        // Draw watermark
-        drawWatermark(ctx);
 
         requestAnimationFrame(animate);
     }
