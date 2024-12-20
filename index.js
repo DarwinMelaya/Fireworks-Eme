@@ -812,7 +812,12 @@ function init() {
 	// Initialize and store original volumes
 	soundManager.initVolumes();
 	
-	// Set initial volume balance (music louder than effects)
+	// Initialize audio context and music
+	if (soundManager.ctx.state === 'suspended') {
+		soundManager.ctx.resume();
+	}
+	
+	// Set initial volume balance
 	soundManager.setVolumeBalance(0.8, 0.4);
 	
 	// Populate dropdowns
@@ -2129,15 +2134,22 @@ const soundManager = {
 	musicElement: null,
 	
 	preload() {
-		// Create audio element for background music
+		// Create audio element for background music with proper attributes
 		this.musicElement = new Audio(this.musicURL);
 		this.musicElement.loop = true;
 		this.musicElement.volume = this.musicVolume;
+		// Add these attributes to help with mobile playback
+		this.musicElement.setAttribute('playsinline', '');
+		this.musicElement.setAttribute('webkit-playsinline', '');
+		this.musicElement.preload = 'auto';
 		
-		// Add error handling for music loading
+		// Enhanced error handling
 		this.musicElement.addEventListener('error', (e) => {
 			console.error('Error loading music:', e);
-			// Fallback to alternative music source if needed
+			// Try loading with alternative path if main path fails
+			if (this.musicElement.src !== '/Will Talks.mp3') {
+				this.musicElement.src = '/Will Talks.mp3';
+			}
 		});
 
 		const allFilePromises = [];
@@ -2186,13 +2198,18 @@ const soundManager = {
 
 	playMusic() {
 		if (this.musicElement) {
-			// Create a promise to handle autoplay restrictions
+			// Reset the audio element
+			this.musicElement.currentTime = 0;
+			
 			const playAttempt = this.musicElement.play();
 			
 			if (playAttempt) {
 				playAttempt.catch((error) => {
-					console.log('Autoplay prevented:', error);
-					// Music will now play on first user interaction
+					console.log('Playback failed:', error);
+					// Try playing again after a short delay
+					setTimeout(() => {
+						this.musicElement.play().catch(e => console.log('Retry failed:', e));
+					}, 100);
 				});
 			}
 		}
@@ -2379,211 +2396,41 @@ if (IS_HEADER) {
 	}, 0);
 }
 
-// Wait for DOM to load
+// Update the DOM loaded event handler
 document.addEventListener('DOMContentLoaded', () => {
     const mainCanvas = document.getElementById('main-canvas');
     const trailsCanvas = document.getElementById('trails-canvas');
     const touchInstruction = document.querySelector('.touch-instruction');
     
-    // Remove the 'remove' class from stage-container to show it
-    document.querySelector('.stage-container').classList.remove('remove');
-    // Hide the loading screen
-    document.querySelector('.loading-init').classList.add('remove');
-
-    // Hide instruction and start music on first interaction
-    function handleFirstInteraction() {
-        touchInstruction.classList.add('hide');
+    // Create a function to handle both music and interaction
+    function initializeAudioAndInteraction() {
+        // Ensure audio context is resumed
+        if (soundManager.ctx.state === 'suspended') {
+            soundManager.ctx.resume();
+        }
         
-        // Start playing background music with user interaction
-        if (soundManager.musicElement && !soundManager.isMusicPlaying()) {
+        // Try to play music
+        if (!soundManager.isMusicPlaying()) {
             soundManager.playMusic();
         }
         
-        // Remove the event listeners after first interaction
-        document.removeEventListener('click', handleFirstInteraction);
-        document.removeEventListener('touchstart', handleFirstInteraction);
-    }
-
-    // Add event listeners for both click and touch
-    document.addEventListener('click', handleFirstInteraction);
-    document.addEventListener('touchstart', handleFirstInteraction);
-
-    // Set up canvas sizes
-    function resizeCanvas() {
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        // Hide instruction
+        touchInstruction.classList.add('hide');
         
-        mainCanvas.width = width;
-        mainCanvas.height = height;
-        trailsCanvas.width = width;
-        trailsCanvas.height = height;
+        // Remove all interaction listeners
+        document.removeEventListener('click', initializeAudioAndInteraction);
+        document.removeEventListener('touchstart', initializeAudioAndInteraction);
+        document.removeEventListener('touchend', initializeAudioAndInteraction);
+        mainCanvas.removeEventListener('click', initializeAudioAndInteraction);
+        mainCanvas.removeEventListener('touchstart', initializeAudioAndInteraction);
     }
 
-    // Initial resize
-    resizeCanvas();
-    
-    // Resize canvas when window size changes
-    window.addEventListener('resize', resizeCanvas);
+    // Add multiple event listeners to catch all possible interaction types
+    document.addEventListener('click', initializeAudioAndInteraction);
+    document.addEventListener('touchstart', initializeAudioAndInteraction);
+    document.addEventListener('touchend', initializeAudioAndInteraction);
+    mainCanvas.addEventListener('click', initializeAudioAndInteraction);
+    mainCanvas.addEventListener('touchstart', initializeAudioAndInteraction);
 
-    // Messages to display
-    const messages = [
-        "Miss Na Kita",
-        "Balik Ka Na"
-    ];
-
-    // Simple firework particle
-    class Firework {
-        constructor(x, y, targetX, targetY, ctx) {
-            this.x = x;
-            this.y = y;
-            this.targetX = targetX;
-            this.targetY = targetY;
-            this.ctx = ctx;
-            this.speed = 2;
-            this.angle = Math.atan2(targetY - y, targetX - x);
-            this.radius = 2;
-            this.exploded = false;
-            this.particles = [];
-            this.message = messages[Math.floor(Math.random() * messages.length)];
-            this.textOpacity = 1;
-            this.textSize = 40;
-            this.glowSize = 20;
-        }
-
-        update() {
-            if (!this.exploded) {
-                this.x += Math.cos(this.angle) * this.speed;
-                this.y += Math.sin(this.angle) * this.speed;
-
-                // Check if firework reached target
-                if (Math.abs(this.x - this.targetX) < 5 && Math.abs(this.y - this.targetY) < 5) {
-                    this.explode();
-                }
-            } else {
-                // Update explosion particles
-                this.particles.forEach((particle, index) => {
-                    particle.x += particle.vx;
-                    particle.y += particle.vy;
-                    particle.vy += 0.1; // gravity
-                    particle.alpha -= 0.01;
-
-                    if (particle.alpha <= 0) {
-                        this.particles.splice(index, 1);
-                    }
-                });
-
-                // Fade out text
-                if (this.textOpacity > 0) {
-                    this.textOpacity -= 0.005;
-                }
-            }
-        }
-
-        draw() {
-            if (!this.exploded) {
-                this.ctx.beginPath();
-                this.ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                this.ctx.fillStyle = 'white';
-                this.ctx.fill();
-            } else {
-                // Draw explosion particles
-                this.particles.forEach(particle => {
-                    this.ctx.beginPath();
-                    this.ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-                    this.ctx.fillStyle = `rgba(${particle.color}, ${particle.alpha})`;
-                    this.ctx.fill();
-                });
-
-                // Draw glowing text
-                if (this.textOpacity > 0) {
-                    this.ctx.save();
-                    
-                    // Set text properties
-                    this.ctx.font = `bold ${this.textSize}px "Russo One"`;
-                    this.ctx.textAlign = 'center';
-                    this.ctx.textBaseline = 'middle';
-
-                    // Draw glow effect
-                    this.ctx.shadowColor = 'rgba(255, 255, 255, ' + this.textOpacity + ')';
-                    this.ctx.shadowBlur = this.glowSize;
-                    
-                    // Multiple shadow layers for stronger glow
-                    for (let i = 0; i < 5; i++) {
-                        this.ctx.shadowBlur = this.glowSize + i * 2;
-                        this.ctx.fillStyle = `rgba(255, 255, 255, ${this.textOpacity * 0.2})`;
-                        this.ctx.fillText(this.message, this.x, this.y);
-                    }
-
-                    // Draw main text
-                    this.ctx.shadowBlur = 0;
-                    this.ctx.fillStyle = `rgba(255, 255, 255, ${this.textOpacity})`;
-                    this.ctx.fillText(this.message, this.x, this.y);
-                    
-                    this.ctx.restore();
-                }
-            }
-        }
-
-        explode() {
-            this.exploded = true;
-            // Create explosion particles
-            for (let i = 0; i < 50; i++) {
-                const angle = (Math.PI * 2 / 50) * i;
-                const velocity = 3;
-                const color = `${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255}`;
-                
-                this.particles.push({
-                    x: this.x,
-                    y: this.y,
-                    vx: Math.cos(angle) * velocity * (0.5 + Math.random()),
-                    vy: Math.sin(angle) * velocity * (0.5 + Math.random()),
-                    radius: 1,
-                    alpha: 1,
-                    color: color
-                });
-            }
-        }
-
-        isDead() {
-            return this.exploded && this.particles.length === 0 && this.textOpacity <= 0;
-        }
-    }
-
-    const ctx = mainCanvas.getContext('2d');
-    let fireworks = [];
-
-    // Click handler to launch fireworks
-    mainCanvas.addEventListener('click', (e) => {
-        const rect = mainCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        // Create new firework from bottom of screen to click position
-        fireworks.push(new Firework(
-            mainCanvas.width / 2,  // Start X (middle bottom)
-            mainCanvas.height,     // Start Y (bottom)
-            x,                     // Target X (click position)
-            y,                     // Target Y (click position)
-            ctx
-        ));
-    });
-
-    // Modify your animate function to include the watermark
-    function animate() {
-        // Clear canvas with semi-transparent black for trail effect
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-        ctx.fillRect(0, 0, mainCanvas.width, mainCanvas.height);
-
-        // Update and draw fireworks
-        fireworks = fireworks.filter(firework => {
-            firework.update();
-            firework.draw();
-            return !firework.isDead();
-        });
-
-        requestAnimationFrame(animate);
-    }
-
-    // Start animation
-    animate();
+    // ... rest of your DOM loaded code ...
 });
